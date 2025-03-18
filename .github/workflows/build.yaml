@@ -1,118 +1,39 @@
-name: Android CI
+name: android_build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      PROJECT_ROOT: ./project
-      BUILD_VARIANT: assembleDebug
-
     steps:
-      - name: Checkout Code
+      - name: Checkout the code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # 获取完整提交历史以支持git describe
 
-      - name: Cache Gradle
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Setup JDK
+      - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          java-version: '11'  # 推荐升级到LTS版本
-          distribution: 'temurin'
-          cache: 'gradle'
+          java-version: 1.8
 
-      - name: Parse Project URL
-        id: project-config
+      - id: get-project
+        name: Get project name
+        # 修改点：使用新版输出方式
         run: |
-          if [ ! -f "project-to-build" ]; then
-            echo "❌ project-to-build 文件不存在" >&2
-            exit 1
-          fi
-          PROJECT_URL=$(cat project-to-build | tr -d '\n')
-          echo "PROJECT_URL=$PROJECT_URL" >> $GITHUB_OUTPUT
-          echo "CLONE_DIR=$PROJECT_ROOT" >> $GITHUB_OUTPUT
+          PROJECT=$(cat project-to-build | tr -d '\n')
+          echo "PROJECT=$PROJECT" >> $GITHUB_OUTPUT
 
-      - name: Clone Repository
+      - name: Clone project
+        run: git clone --depth=1 "${{ steps.get-project.outputs.PROJECT }}" project
+
+      - name: Build the app
+        working-directory: ./project
         run: |
-          git clone --depth 1 \
-            --branch main \
-            "${{ steps.project-config.outputs.PROJECT_URL }}" \
-            "${{ steps.project-config.outputs.CLONE_DIR }}" || {
-              echo "::error::仓库克隆失败，请检查URL有效性"
-              exit 1
-            }
+          if [ ! -f "gradlew" ]; then gradle wrapper; fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Gradle Build
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          # 自动修复可能的换行符问题
-          dos2unix gradlew 2>/dev/null || true
-          
-          # 动态生成缺失的gradle wrapper
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --warning-mode all
-          fi
-
-          # 权限控制
-          find . -name "gradlew" -exec chmod +x {} \;
-
-          # 带缓存清理的构建
-          ./gradlew clean ${{ env.BUILD_VARIANT }} \
-            --no-daemon \
-            --stacktrace \
-            --warning-mode all \
-            -Dorg.gradle.parallel=true \
-            -Dorg.gradle.caching=true
-
-      - name: Locate APKs
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          APK_PATHS=$(find . -path '*/outputs/apk/*/*.apk' -print0 | xargs -0 realpath --relative-to=$GITHUB_WORKSPACE)
-          echo "APK_PATHS=$APK_PATHS" >> $GITHUB_OUTPUT
-          echo "找到APK文件："
-          echo "$APK_PATHS" | tr ' ' '\n'
-
-      - name: Upload Artifacts
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apks-${{ github.run_number }}
-          path: |
-            ${{ steps.locate-apks.outputs.APK_PATHS }}
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: Build Report
-        if: always()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const status = '${{ job.status }}'
-            const conclusion = '${{ job.conclusion }}'
-            const report = {
-              title: `Android Build #${{ github.run_number }}`,
-              summary: `**状态**: ${status}\n**结果**: ${conclusion}`,
-              text: '构建详情请查看日志'
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `### Build Report\n${JSON.stringify(report, null, 2)}`
-            })
+          name: my-build-apk
+          path: ./**/*.apk
