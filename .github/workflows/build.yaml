@@ -1,6 +1,8 @@
 name: android_build
+
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -9,15 +11,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up JDK
         uses: actions/setup-java@v3
-        with:
-          java-version: '11'  # 推荐升级到LTS版本
+         with:
+          java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
       - id: get-project
         name: Get project name
-        run: echo "PROJECT::$(cat project-to-build)" >> $GITHUB_OUTPUT
+        run: echo "::set-output name=PROJECT::$(cat project-to-build)"
       - name: Clone project
-        run: git clone --depth=1 "${{ steps.get-project.outputs.PROJECT }}" project
+        run: git clone --depth=1 ${{ steps.get-project.outputs.PROJECT }} project
       - name: Build the app
         working-directory: ./project
         run: |
