@@ -1,39 +1,29 @@
 name: android_build
-
 on:
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
-
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           java-version: '11'  # 推荐升级到LTS版本
           distribution: 'temurin'
           cache: 'gradle'
-
       - id: get-project
         name: Get project name
-        # 修改点：使用新版输出方式
-        run: |
-          PROJECT=$(cat project-to-build | tr -d '\n')
-          echo "PROJECT=$PROJECT" >> $GITHUB_OUTPUT
-
+        run: echo "PROJECT::$(cat project-to-build)" >> $GITHUB_OUTPUT
       - name: Clone project
         run: git clone --depth=1 "${{ steps.get-project.outputs.PROJECT }}" project
-
       - name: Build the app
         working-directory: ./project
         run: |
           if [ ! -f "gradlew" ]; then gradle wrapper; fi
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
