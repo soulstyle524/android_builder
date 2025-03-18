@@ -12,7 +12,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
       - id: get-project
         name: Get project name
@@ -24,7 +24,9 @@ jobs:
         run: |
           if [ ! -f "gradlew" ]; then gradle wrapper; fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          # 关键修复：添加 JVM 参数
+          ./gradlew assembleDebug --stacktrace \
+            -Dorg.gradle.jvmargs="--add-opens java.base/java.io=ALL-UNNAMED"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
